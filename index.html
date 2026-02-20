@@ -2,47 +2,88 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>C9 UZAIR - 3D CUBE MAGIC</title>
+    <title>C9 UZAIR - 3D MINI CUBE</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        body { margin: 0; background: #000; overflow: hidden; }
         #v { position: fixed; opacity: 0; pointer-events: none; } /* Camera Hidden */
-        #ui { position: fixed; top: 20px; left: 20px; color: #00ff41; font-weight: bold; z-index: 100; }
+        #ui { 
+            position: fixed; top: 20px; width: 100%; text-align: center;
+            color: #00ff41; font-family: monospace; font-size: 12px; letter-spacing: 2px;
+        }
     </style>
 </head>
 <body>
     <video id="v" autoplay playsinline></video>
-    <div id="ui">SYSTEM: 3D CUBE ACTIVE</div>
+    <div id="ui">[[ SYSTEM ACTIVE: 3D TRACKING ]]</div>
 
 <script>
-    // 1. Setup Three.js (The 3D World)
+    // 1. THREE.JS SCENE SETUP
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Create White 3D Cube
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: false });
+    // 2. CREATE STYLIZED 3D CUBE (Small & Bordered)
+    const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6); // Size chota kar diya
+    const material = new THREE.MeshBasicMaterial({ 
+        color: 0xffffff, 
+        transparent: true, 
+        opacity: 0.8 
+    });
     const cube = new THREE.Mesh(geometry, material);
     
-    // Add Edges (Outlines) to make it look cool
+    // Borders (Outlines)
     const edges = new THREE.EdgesGeometry(geometry);
-    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ff41 }));
-    cube.add(line);
+    const borderLines = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ 
+        color: 0x00ff41, // Neon Green Borders
+        linewidth: 2 
+    }));
+    cube.add(borderLines); // Border ko cube ka hissa bana diya
     
     scene.add(cube);
     camera.position.z = 5;
 
-    // 2. Setup MediaPipe (The AI)
+    // 3. AI HAND TRACKING
     async function startAI() {
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.8 });
         
-        hands.onResults(onResults);
+        hands.onResults(results => {
+            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+                cube.visible = false;
+                return;
+            }
+
+            const lm = results.multiHandLandmarks[0];
+
+            // GESTURE: Fist to Hide (Muthi band logic)
+            const isFist = lm[8].y > lm[6].y && lm[12].y > lm[10].y && lm[16].y > lm[14].y;
+            
+            if (isFist) {
+                cube.visible = false;
+            } else {
+                cube.visible = true;
+
+                // Position Tracking (Palm center)
+                const x = (0.5 - lm[9].x) * 8; 
+                const y = (0.5 - lm[9].y) * 5;
+                cube.position.x = x;
+                cube.position.y = y;
+
+                // Zoom Logic (Distance between thumb and pinky)
+                const dist = Math.sqrt(Math.pow(lm[4].x - lm[20].x, 2) + Math.pow(lm[4].y - lm[20].y, 2));
+                const scaleFactor = dist * 8; 
+                cube.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+                // Constant Rotation for 3D Feel
+                cube.rotation.x += 0.02;
+                cube.rotation.y += 0.02;
+            }
+        });
 
         const cam = new Camera(document.getElementById('v'), {
             onFrame: async () => await hands.send({image: document.getElementById('v')}),
@@ -51,43 +92,6 @@
         cam.start();
     }
 
-    function onResults(res) {
-        if (!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) {
-            cube.visible = false;
-            return;
-        }
-
-        const lm = res.multiHandLandmarks[0];
-
-        // --- GESTURE 1: Muthi Band (Fist) to Hide ---
-        // Finger tips (8,12,16) below knuckles (5,9,13)
-        const isFist = lm[8].y > lm[5].y && lm[12].y > lm[9].y && lm[16].y > lm[13].y;
-        
-        if (isFist) {
-            cube.visible = false;
-        } else {
-            cube.visible = true;
-
-            // --- GESTURE 2: Tracking (Move with Palm) ---
-            // Convert AI coords (0 to 1) to 3D world coords
-            const x = (0.5 - lm[9].x) * 10; 
-            const y = (0.5 - lm[9].y) * 6;
-            cube.position.x = x;
-            cube.position.y = y;
-
-            // --- GESTURE 3: Zoom In/Out (Depth) ---
-            // Distance between thumb(4) and pinky(20)
-            const d = Math.sqrt(Math.pow(lm[4].x - lm[20].x, 2) + Math.pow(lm[4].y - lm[20].y, 2));
-            const scale = d * 10; // Adjust multiplier for sensitivity
-            cube.scale.set(scale, scale, scale);
-
-            // Auto Rotation for 3D effect
-            cube.rotation.x += 0.05;
-            cube.rotation.y += 0.05;
-        }
-    }
-
-    // Animation Loop
     function animate() {
         requestAnimationFrame(animate);
         renderer.render(scene, camera);
@@ -96,7 +100,6 @@
     startAI();
     animate();
 
-    // Handle Resize
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
