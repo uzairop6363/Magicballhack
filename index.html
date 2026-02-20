@@ -2,99 +2,91 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>C9 UZAIR - VFX QUANTUM</title>
+    <title>C9 UZAIR - 360 ROTATION AI</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
         body { margin: 0; background: #000; overflow: hidden; }
         #v { position: fixed; opacity: 0; pointer-events: none; }
-        #vfx-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle, transparent 50%, rgba(0,255,65,0.15) 100%);
-            pointer-events: none; border: 2px solid rgba(0,255,65,0.2); box-sizing: border-box;
-        }
-        #hud {
-            position: fixed; top: 20px; right: 20px; color: #00ff41;
-            font-family: 'Courier New', monospace; font-size: 10px; text-align: right;
+        #ui { 
+            position: fixed; top: 20px; width: 100%; text-align: center;
+            color: #00ff41; font-family: 'Courier New', monospace; font-size: 14px;
+            text-transform: uppercase; letter-spacing: 2px; z-index: 100;
         }
     </style>
 </head>
 <body>
-    <div id="vfx-overlay"></div>
-    <div id="hud">CORE_TEMP: STABLE<br>SIGNAL: 5G_ENCRYPTED<br>NEURAL_LINK: 98%</div>
+    <div id="ui">MODE: TRACKING</div>
     <video id="v" autoplay playsinline></video>
 
 <script>
+    // --- THREE.JS SETUP ---
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // --- CUBE WITH GLOW ---
-    const group = new THREE.Group();
-    const geometry = new THREE.BoxGeometry(0.7, 0.7, 0.7);
-    const material = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.2 });
+    const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+    const material = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 });
     const cube = new THREE.Mesh(geometry, material);
     
-    // Glowing Borders
     const edges = new THREE.EdgesGeometry(geometry);
-    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ff41, linewidth: 3 }));
+    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ff41, linewidth: 2 }));
     cube.add(line);
-    
-    // Internal Core
-    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2, 1), new THREE.MeshBasicMaterial({ color: 0x00ff41, wireframe: true }));
-    cube.add(core);
-    
-    group.add(cube);
-    scene.add(group);
+    scene.add(cube);
     camera.position.z = 5;
 
-    // --- TRAILS LOGIC ---
-    const trails = [];
-    const maxTrails = 10;
+    let isRotating = false;
+    let prevHandPos = { x: 0, y: 0 };
 
-    // --- AI HAND INTERACTION ---
-    async function initVFX() {
+    // --- AI ENGINE ---
+    async function initAI() {
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
         hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.8 });
         
         hands.onResults(results => {
             if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-                group.visible = false;
+                cube.visible = false;
                 return;
             }
-            group.visible = true;
+            cube.visible = true;
             const lm = results.multiHandLandmarks[0];
+            const ui = document.getElementById('ui');
 
-            // 1. ADVANCED TRACKING
-            const targetX = (0.5 - lm[9].x) * 10;
-            const targetY = (0.5 - lm[9].y) * 6;
+            // 1. PINCH GESTURE LOGIC (Index Tip & Thumb Tip distance)
+            const dist = Math.sqrt(Math.pow(lm[8].x - lm[4].x, 2) + Math.pow(lm[8].y - lm[4].y, 2));
             
-            // Lag/Smooth movement
-            group.position.x += (targetX - group.position.x) * 0.15;
-            group.position.y += (targetY - group.position.y) * 0.15;
+            if (dist < 0.05) {
+                // ROTATION MODE
+                isRotating = true;
+                ui.innerText = "MODE: 360° ROTATION";
+                ui.style.color = "#ff3b30";
 
-            // 2. PINCH ROTATION
-            const pinch = Math.sqrt(Math.pow(lm[8].x - lm[4].x, 2) + Math.pow(lm[8].y - lm[4].y, 2));
-            if(pinch < 0.05) {
-                cube.rotation.y += 0.1;
-                cube.rotation.x += 0.05;
-                core.scale.set(1.5, 1.5, 1.5);
+                let moveX = (lm[9].x - prevHandPos.x) * 10;
+                let moveY = (lm[9].y - prevHandPos.y) * 10;
+
+                cube.rotation.y += moveX;
+                cube.rotation.x += moveY;
             } else {
-                cube.rotation.y += 0.02;
-                core.scale.set(1, 1, 1);
-            }
+                // TRACKING MODE
+                isRotating = false;
+                ui.innerText = "MODE: TRACKING";
+                ui.style.color = "#00ff41";
 
-            // 3. AUTO-ZOOM
-            const zoom = Math.sqrt(Math.pow(lm[4].x - lm[20].x, 2) + Math.pow(lm[4].y - lm[20].y, 2)) * 10;
-            group.scale.set(zoom, zoom, zoom);
-            
-            // Create Trail clones
-            if (Math.abs(targetX - group.position.x) > 0.1) {
-                createTrail(group.position, group.rotation, group.scale);
+                const targetX = (0.5 - lm[9].x) * 10;
+                const targetY = (0.5 - lm[9].y) * 6;
+                cube.position.x += (targetX - cube.position.x) * 0.1;
+                cube.position.y += (targetY - cube.position.y) * 0.1;
+
+                // Zoom logic
+                const zoomDist = Math.sqrt(Math.pow(lm[4].x - lm[20].x, 2) + Math.pow(lm[4].y - lm[20].y, 2));
+                const s = zoomDist * 10;
+                cube.scale.set(s, s, s);
             }
+            
+            prevHandPos = { x: lm[9].x, y: lm[9].y };
         });
 
         const cam = new Camera(document.getElementById('v'), {
@@ -104,30 +96,15 @@
         cam.start();
     }
 
-    function createTrail(pos, rot, scl) {
-        const t = group.clone();
-        scene.add(t);
-        trails.push({ mesh: t, alpha: 0.5 });
-    }
-
     function animate() {
         requestAnimationFrame(animate);
-        
-        // Handle Trails
-        for (let i = trails.length - 1; i >= 0; i--) {
-            trails[i].alpha -= 0.05;
-            trails[i].mesh.children[0].material.opacity = trails[i].alpha;
-            if (trails[i].alpha <= 0) {
-                scene.remove(trails[i].mesh);
-                trails.splice(i, 1);
-            }
+        if(!isRotating) {
+            cube.rotation.y += 0.01; // Auto rotation when not controlled
         }
-
-        core.rotation.z -= 0.05;
         renderer.render(scene, camera);
     }
 
-    initVFX();
+    initAI();
     animate();
 </script>
 </body>
