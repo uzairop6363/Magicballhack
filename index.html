@@ -3,147 +3,105 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>C9 UZAIR - BRIGHT MAGIC</title>
+    <title>C9 UZAIR - AIR UI</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        body { margin: 0; background: #111; overflow: hidden; font-family: sans-serif; color: white; }
+        #v { position: fixed; width: 100%; height: 100%; object-fit: cover; opacity: 0.2; transform: scaleX(-1); }
         
-        /* Brightness Fix Here */
-        #v { 
-            position: fixed; 
-            width: 100%; 
-            height: 100%; 
-            object-fit: cover; 
-            opacity: 1; /* Full Brightness */
-            transform: scaleX(-1);
-            filter: brightness(1.1) contrast(1.1); /* Extra Clarity */
-        }
-        
-        #ball {
-            width: 80px; height: 80px; 
-            background: url('https://cdn-icons-png.flaticon.com/512/532/532495.png');
-            background-size: cover; position: absolute; 
-            filter: drop-shadow(0 0 20px #00ff41);
-            display: none; z-index: 100; pointer-events: none;
+        /* Gallery Container */
+        #gallery {
+            position: relative; width: 100vw; height: 100vh;
+            display: flex; align-items: center; justify-content: center;
         }
 
-        #ui { position: fixed; top: 20px; width: 100%; text-align: center; z-index: 200; }
-        .stat { 
-            background: rgba(0,0,0,0.6); 
-            display: inline-block; 
-            padding: 5px 15px; 
-            border-radius: 20px; 
-            color: #00ff41; 
-            font-weight: bold; 
-            font-size: 14px; 
+        .card {
+            position: absolute; width: 280px; height: 400px;
+            background: linear-gradient(45deg, #00ff41, #008f11);
+            border-radius: 20px; display: flex; align-items: center; justify-content: center;
+            font-size: 50px; font-weight: bold; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            transition: transform 0.3s;
         }
-        
-        .btn-box { position: fixed; bottom: 40px; width: 100%; display: flex; justify-content: center; gap: 10px; z-index: 300; }
-        button { padding: 15px 25px; border-radius: 12px; border: none; font-weight: bold; font-size: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .primary { background: #00ff41; color: #000; }
-        .secondary { background: #fff; color: #000; }
+
+        #ui-status { position: fixed; top: 40px; width: 100%; text-align: center; font-weight: bold; color: #00ff41; z-index: 100; }
+        .hint { position: fixed; bottom: 40px; width: 100%; text-align: center; font-size: 12px; color: #888; }
     </style>
 </head>
 <body>
+
     <video id="v" autoplay playsinline></video>
-    <div id="ball"></div>
-    <div id="ui"><div id="msg" class="stat">AI SYSTEM READY</div></div>
     
-    <div class="btn-box" id="setup">
-        <button class="primary" onclick="init(true)">PHONE A (Sender)</button>
-        <button class="secondary" onclick="init(false)">PHONE B (Receiver)</button>
+    <div id="ui-status">MOVING AIR SENSOR ACTIVE</div>
+
+    <div id="gallery">
+        <div class="card" id="card1">PHOTO 1</div>
     </div>
 
+    <div class="hint">Swipe your hand Left/Right in the air to change photos</div>
+
 <script>
-    const ball = document.getElementById('ball');
-    const msg = document.getElementById('msg');
-    let hasBall = false;
-    let ballInAir = false;
-    
-    // MQTT Setup
-    let client = mqtt.connect('wss://test.mosquitto.org:8081/mqtt');
-    let topic = "uzair/magic/track/999"; 
+    const card = document.getElementById('card1');
+    const msg = document.getElementById('ui-status');
+    let photos = ["PHOTO 1", "PHOTO 2", "PHOTO 3", "PHOTO 4"];
+    let currentIndex = 0;
 
-    client.on('connect', () => { msg.innerText = "NETWORK LINKED"; client.subscribe(topic); });
-
-    client.on('message', (t, m) => {
-        let cmd = m.toString();
-        if(cmd === "SENT") { 
-            ballInAir = true; 
-            hasBall = false;
-            gsap.to(ball, {scale: 0, duration: 0.3, onComplete: () => ball.style.display='none'});
-            msg.innerText = "BALL IS IN THE AIR...";
-        }
-        if(cmd === "CAUGHT") { 
-            ballInAir = false;
-            msg.innerText = "OTHER PHONE CAUGHT IT";
-        }
-    });
-
-    async function init(first) {
-        document.getElementById('setup').style.display = 'none';
-        msg.innerText = "LOADING AI CAMERA...";
-        
+    async function startAI() {
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6});
-        hands.onResults(gotHands);
+        hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7});
+        hands.onResults(onResults);
 
         const cam = new Camera(document.getElementById('v'), {
             onFrame: async () => await hands.send({image: document.getElementById('v')}),
-            width: 1280, height: 720
+            width: 640, height: 480
         });
-        
-        if(first) {
-            hasBall = true;
-            ball.style.display = 'block';
-            msg.innerText = "HAVE BALL - CLOSE FIST";
-        } else {
-            hasBall = false;
-            msg.innerText = "WAITING - OPEN HAND";
-        }
-        
         cam.start();
     }
 
-    let lastAction = 0;
-    function gotHands(res) {
-        if(!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) return;
-        
-        let lm = res.multiHandLandmarks[0];
-        // Tracking Ball on Palm
-        let x = (1 - lm[9].x) * window.innerWidth;
-        let y = lm[9].y * window.innerHeight;
+    let lastX = null;
+    let canSwipe = true;
 
-        if(hasBall) {
-            gsap.to(ball, {left: x - 40, top: y - 40, duration: 0.1});
+    function onResults(res) {
+        if (!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) {
+            lastX = null;
+            return;
         }
 
-        // Gesture Detection
-        let isFist = lm[8].y > lm[6].y && lm[12].y > lm[10].y;
-        let isOpen = lm[8].y < lm[6].y && lm[12].y < lm[10].y;
-        let now = Date.now();
+        // 9 is the palm center
+        let currentX = res.multiHandLandmarks[0][9].x;
 
-        if(now - lastAction < 2000) return;
+        if (lastX !== null && canSwipe) {
+            let diff = currentX - lastX;
 
-        if(hasBall && isFist) {
-            lastAction = now;
-            hasBall = false;
-            client.publish(topic, "SENT");
-            msg.innerText = "SENT!";
-        } 
-        else if(!hasBall && ballInAir && isOpen) {
-            lastAction = now;
-            hasBall = true;
-            ballInAir = false;
-            ball.style.display = 'block';
-            gsap.fromTo(ball, {scale: 0}, {scale: 1.2, duration: 0.4, ease: "back.out"});
-            client.publish(topic, "CAUGHT");
-            msg.innerText = "CAUGHT!";
+            // Sensitivity threshold
+            if (Math.abs(diff) > 0.15) {
+                if (diff > 0) handleSwipe("RIGHT");
+                else handleSwipe("LEFT");
+                
+                canSwipe = false;
+                setTimeout(() => { canSwipe = true; }, 1000); // Cool-down
+            }
         }
+        lastX = currentX;
     }
+
+    function handleSwipe(dir) {
+        msg.innerText = "AIR SWIPE: " + dir;
+        
+        let moveOut = dir === "RIGHT" ? 500 : -500;
+        
+        // Animation
+        gsap.to(card, { x: moveOut, opacity: 0, duration: 0.4, onComplete: () => {
+            currentIndex = (currentIndex + 1) % photos.length;
+            card.innerText = photos[currentIndex];
+            gsap.fromTo(card, { x: -moveOut, opacity: 0 }, { x: 0, opacity: 1, duration: 0.4 });
+        }});
+
+        setTimeout(() => { msg.innerText = "MOVING AIR SENSOR ACTIVE"; }, 1000);
+    }
+
+    startAI();
 </script>
 </body>
 </html>
