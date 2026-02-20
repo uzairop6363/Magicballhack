@@ -3,49 +3,39 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>C9 UZAIR - AIR UI</title>
+    <title>C9 UZAIR - AIR SCROLLER</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <style>
-        body { margin: 0; background: #111; overflow: hidden; font-family: sans-serif; color: white; }
-        #v { position: fixed; width: 100%; height: 100%; object-fit: cover; opacity: 0.2; transform: scaleX(-1); }
+        body { margin: 0; background: #000; color: white; overflow: hidden; font-family: sans-serif; }
+        #v { position: fixed; bottom: 10px; right: 10px; width: 120px; height: 90px; border-radius: 10px; border: 2px solid #00ff41; object-fit: cover; transform: scaleX(-1); z-index: 1000; }
         
-        /* Gallery Container */
-        #gallery {
-            position: relative; width: 100vw; height: 100vh;
-            display: flex; align-items: center; justify-content: center;
-        }
+        /* Simulated TikTok Feed */
+        #feed { height: 100vh; overflow-y: hidden; scroll-behavior: smooth; }
+        .video-box { height: 100vh; width: 100%; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: bold; border-bottom: 2px solid #222; position: relative; }
+        .video-box:nth-child(odd) { background: #111; }
+        .video-box:nth-child(even) { background: #000; }
 
-        .card {
-            position: absolute; width: 280px; height: 400px;
-            background: linear-gradient(45deg, #00ff41, #008f11);
-            border-radius: 20px; display: flex; align-items: center; justify-content: center;
-            font-size: 50px; font-weight: bold; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-            transition: transform 0.3s;
-        }
-
-        #ui-status { position: fixed; top: 40px; width: 100%; text-align: center; font-weight: bold; color: #00ff41; z-index: 100; }
-        .hint { position: fixed; bottom: 40px; width: 100%; text-align: center; font-size: 12px; color: #888; }
+        #status { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,255,65,0.2); padding: 10px 20px; border-radius: 30px; border: 1px solid #00ff41; color: #00ff41; z-index: 100; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <video id="v" autoplay playsinline></video>
-    
-    <div id="ui-status">MOVING AIR SENSOR ACTIVE</div>
+    <div id="status">HAND SENSOR ACTIVE</div>
 
-    <div id="gallery">
-        <div class="card" id="card1">PHOTO 1</div>
+    <div id="feed">
+        <div class="video-box">🔥 VIDEO 1 (Scroll Down)</div>
+        <div class="video-box">😎 VIDEO 2</div>
+        <div class="video-box">⚡ VIDEO 3</div>
+        <div class="video-box">👑 VIDEO 4</div>
     </div>
 
-    <div class="hint">Swipe your hand Left/Right in the air to change photos</div>
-
 <script>
-    const card = document.getElementById('card1');
-    const msg = document.getElementById('ui-status');
-    let photos = ["PHOTO 1", "PHOTO 2", "PHOTO 3", "PHOTO 4"];
-    let currentIndex = 0;
+    const feed = document.getElementById('feed');
+    const msg = document.getElementById('status');
+    let currentVideo = 0;
+    let canScroll = true;
 
     async function startAI() {
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
@@ -59,46 +49,44 @@
         cam.start();
     }
 
-    let lastX = null;
-    let canSwipe = true;
+    let startY = null;
 
     function onResults(res) {
         if (!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) {
-            lastX = null;
+            startY = null;
             return;
         }
 
-        // 9 is the palm center
-        let currentX = res.multiHandLandmarks[0][9].x;
+        // 9 is the middle of the palm
+        let currentY = res.multiHandLandmarks[0][9].y;
 
-        if (lastX !== null && canSwipe) {
-            let diff = currentX - lastX;
+        if (startY !== null && canScroll) {
+            let diff = currentY - startY;
 
-            // Sensitivity threshold
+            // Sensitivity for Up/Down scroll
             if (Math.abs(diff) > 0.15) {
-                if (diff > 0) handleSwipe("RIGHT");
-                else handleSwipe("LEFT");
+                if (diff > 0) scrollFeed("DOWN"); // Moving hand down = scroll up
+                else scrollFeed("UP"); // Moving hand up = scroll down
                 
-                canSwipe = false;
-                setTimeout(() => { canSwipe = true; }, 1000); // Cool-down
+                canScroll = false;
+                setTimeout(() => { canScroll = true; }, 1000); 
             }
         }
-        lastX = currentX;
+        startY = currentY;
     }
 
-    function handleSwipe(dir) {
-        msg.innerText = "AIR SWIPE: " + dir;
-        
-        let moveOut = dir === "RIGHT" ? 500 : -500;
-        
-        // Animation
-        gsap.to(card, { x: moveOut, opacity: 0, duration: 0.4, onComplete: () => {
-            currentIndex = (currentIndex + 1) % photos.length;
-            card.innerText = photos[currentIndex];
-            gsap.fromTo(card, { x: -moveOut, opacity: 0 }, { x: 0, opacity: 1, duration: 0.4 });
-        }});
+    function scrollFeed(dir) {
+        if (dir === "UP" && currentVideo < 3) {
+            currentVideo++;
+            msg.innerText = "SCROLLING UP ⬆️";
+        } else if (dir === "DOWN" && currentVideo > 0) {
+            currentVideo--;
+            msg.innerText = "SCROLLING DOWN ⬇️";
+        }
 
-        setTimeout(() => { msg.innerText = "MOVING AIR SENSOR ACTIVE"; }, 1000);
+        feed.scrollTo({ top: currentVideo * window.innerHeight, behavior: 'smooth' });
+        
+        setTimeout(() => { msg.innerText = "HAND SENSOR ACTIVE"; }, 1000);
     }
 
     startAI();
