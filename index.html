@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>C9 UZAIR - AI MAGIC BALL</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    
+    <style>
+        body { margin: 0; background: #111; color: white; overflow: hidden; font-family: sans-serif; text-align: center; }
+        
+        #video-feed { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.3; transform: scaleX(-1); z-index: 1; }
+        
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; padding: 30px; box-sizing: border-box; }
+        
+        #status { font-size: 18px; font-weight: bold; color: #00ff41; text-shadow: 0 2px 4px #000; }
+        #debug { font-size: 12px; color: #aaa; margin-top: 10px; }
+
+        /* The Magic Ball */
+        #ball {
+            width: 100px; height: 100px; background: radial-gradient(circle, #fff, #00ff41);
+            border-radius: 50%; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); box-shadow: 0 0 50px #00ff41;
+            display: none; transition: all 0.2s; animation: float 3s infinite ease-in-out;
+        }
+
+        @keyframes float { 
+            0% { transform: translate(-50%, -40%); } 
+            50% { transform: translate(-50%, -60%); } 
+            100% { transform: translate(-50%, -40%); } 
+        }
+
+        #start-btn { padding: 15px 30px; background: #00ff41; color: #000; border: none; border-radius: 20px; font-weight: bold; font-size: 16px; cursor: pointer; z-index: 20; position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%); }
+        #start-btn:active { background: #fff; }
+    </style>
+</head>
+<body>
+
+    <video id="video-feed" autoplay playsinline muted></video>
+
+    <div id="ball">⚽</div>
+
+    <div id="ui-layer">
+        <div>
+            <div id="status">CONNECTING TO NETWORK...</div>
+            <div id="debug">Wait for AI to load...</div>
+        </div>
+        <button id="start-btn" onclick="startSystem(true)">I HAVE THE BALL</button>
+        <button id="empty-btn" onclick="startSystem(false)" style="margin-top: 10px; padding: 10px; background: transparent; border: 1px solid #00ff41; color: #00ff41; border-radius: 10px;">I AM EMPTY PHONE</button>
+    </div>
+
+    <script>
+        const ball = document.getElementById('ball');
+        const statusTxt = document.getElementById('status');
+        const debugTxt = document.getElementById('debug');
+        const videoElement = document.getElementById('video-feed');
+        
+        let hasBall = false;
+        let isSystemActive = false;
+        let lastActionTime = 0;
+
+        // 1. CONNECT TO PUBLIC MQTT SERVER (To talk between phones)
+        // Note: Using a public test broker. It's magic but relies on internet!
+        const client = mqtt.connect('wss://test.mosquitto.org:8081/mqtt');
+        const topic = "c9uzair/magicball/12345"; // Secret room
+
+        client.on('connect', () => {
+            statusTxt.innerText = "NETWORK LINKED";
+            client.subscribe(topic);
+        });
+
+        client.on('message', (topic, message) => {
+            const msg = message.toString();
+            if (msg === "BALL_GRABBED") {
+                // Someone else grabbed it, so the network ball is floating.
+                // We are ready to receive it if we open our hand.
+                debugTxt.innerText = "Ball is in the network! Open hand to catch.";
+            } 
+            else if (msg === "BALL_CAUGHT") {
+                // Someone else caught it. We must NOT have it.
+                hasBall = false;
+                ball.style.display = 'none';
+                debugTxt.innerText = "Other phone caught the ball.";
+            }
+        });
+
+        function startSystem(imFirst) {
+            isSystemActive = true;
+            document.getElementById('start-btn').style.display = 'none';
+            document.getElementById('empty-btn').style.display = 'none';
+            
+            if (imFirst) {
+                hasBall = true;
+                ball.style.display = 'block';
+                statusTxt.innerText = "YOU HAVE THE BALL. CLOSE FIST TO SEND.";
+                client.publish(topic, "BALL_CAUGHT"); // Tell network I took it
+            } else {
+                hasBall = false;
+                ball.style.display = 'none';
+                statusTxt.innerText = "EMPTY. OPEN HAND TO CATCH.";
+            }
+            startAI();
+        }
+
+        // 2. GOOGLE AI HAND TRACKING
+        async function startAI() {
+            debugTxt.innerText = "Loading Camera & AI...";
+            
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+            videoElement.srcObject = stream;
+
+            const hands = new Hands({locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }});
+
+            hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.7,
+                minTrackingConfidence: 0.7
+            });
+
+            hands.onResults(onResults);
+
+            const camera = new Camera(videoElement, {
+                onFrame: async () => { await hands.send({image: videoElement}); },
+                width: 640, height: 480
+            });
+            camera.start();
+            debugTxt.innerText = "AI Active! Show your hand.";
+        }
+
+        // 3. GESTURE LOGIC (Fist vs Open Hand)
+        function onResults(results) {
+            if (!isSystemActive || !results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+
+            const landmarks = results.multiHandLandmarks[0];
+            
+            // Basic logic assuming hand is upright: 
+            // If Finger Tips (8, 12, 16) are BELOW Knuckles (5, 9, 13) on Y-axis -> Fist
+            // Note: In screen coords, higher Y value means lower on screen.
+            const isFist = landmarks[8].y > landmarks[5].y && landmarks[12].y > landmarks[9].y;
+            const isOpen = landmarks[8].y < landmarks[5].y && landmarks[12].y < landmarks[9].y;
+
+            let now = Date.now();
+            if (now - lastActionTime < 2000) return; // Wait 2 seconds between actions
+
+            if (hasBall && isFist) {
+                // SEND THE BALL
+                hasBall = false;
+                ball.style.display = 'none';
+                statusTxt.innerText = "BALL SENT!";
+                client.publish(topic, "BALL_GRABBED");
+                lastActionTime = now;
+            } 
+            else if (!hasBall && isOpen) {
+                // CATCH THE BALL
+                hasBall = true;
+                ball.style.display = 'block';
+                statusTxt.innerText = "BALL CAUGHT!";
+                client.publish(topic, "BALL_CAUGHT");
+                lastActionTime = now;
+            }
+        }
+    </script>
+</body>
+</html>
