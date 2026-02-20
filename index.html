@@ -1,66 +1,107 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="utf-8">
+    <title>C9 UZAIR - 3D CUBE MAGIC</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; color: #00ff41; font-family: 'Courier New', Courier, monospace; }
-        #v { position: fixed; opacity: 0; pointer-events: none; }
-        
-        /* The Magic Object */
-        #object {
-            width: 150px; height: 150px;
-            background: radial-gradient(circle, #00ff41, #004411);
-            border-radius: 20px;
-            box-shadow: 0 0 50px #00ff41;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 80px; font-weight: bold; color: black;
-            transform: scale(1);
-        }
-
-        #ui { position: fixed; top: 20px; font-weight: bold; letter-spacing: 2px; }
-        .radar { position: fixed; border: 1px solid #00ff41; border-radius: 50%; opacity: 0.3; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        #v { position: fixed; opacity: 0; pointer-events: none; } /* Camera Hidden */
+        #ui { position: fixed; top: 20px; left: 20px; color: #00ff41; font-weight: bold; z-index: 100; }
     </style>
 </head>
 <body>
     <video id="v" autoplay playsinline></video>
-    <div id="ui">SYSTEM: TELEKINESIS ACTIVE</div>
-    <div id="object">⚡</div>
+    <div id="ui">SYSTEM: 3D CUBE ACTIVE</div>
 
-    <script>
-        const obj = document.getElementById('object');
-        const msg = document.getElementById('ui');
+<script>
+    // 1. Setup Three.js (The 3D World)
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-        async function initMagic() {
-            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
+    // Create White 3D Cube
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: false });
+    const cube = new THREE.Mesh(geometry, material);
+    
+    // Add Edges (Outlines) to make it look cool
+    const edges = new THREE.EdgesGeometry(geometry);
+    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ff41 }));
+    cube.add(line);
+    
+    scene.add(cube);
+    camera.position.z = 5;
 
-            hands.onResults(res => {
-                if(!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) {
-                    msg.innerText = "SEARCHING FOR JEDI...";
-                    return;
-                }
-                
-                let lm = res.multiHandLandmarks[0];
-                // Hand depth logic: Distance between thumb (4) and pinky (20)
-                let width = Math.sqrt(Math.pow(lm[4].x - lm[20].x, 2) + Math.pow(lm[4].y - lm[20].y, 2));
-                
-                // Scale the object based on hand width
-                let s = gsap.utils.mapRange(0.1, 0.5, 0.5, 3.5, width);
-                gsap.to(obj, { scale: s, rotation: width * 500, duration: 0.2 });
-                
-                msg.innerText = "FORCE LEVEL: " + Math.round(s * 100) + "%";
-            });
+    // 2. Setup MediaPipe (The AI)
+    async function startAI() {
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
+        
+        hands.onResults(onResults);
 
-            const cam = new Camera(document.getElementById('v'), {
-                onFrame: async () => await hands.send({image: document.getElementById('v')}),
-                width: 1280, height: 720
-            });
-            cam.start();
+        const cam = new Camera(document.getElementById('v'), {
+            onFrame: async () => await hands.send({image: document.getElementById('v')}),
+            width: 1280, height: 720
+        });
+        cam.start();
+    }
+
+    function onResults(res) {
+        if (!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) {
+            cube.visible = false;
+            return;
         }
 
-        initMagic();
-    </script>
+        const lm = res.multiHandLandmarks[0];
+
+        // --- GESTURE 1: Muthi Band (Fist) to Hide ---
+        // Finger tips (8,12,16) below knuckles (5,9,13)
+        const isFist = lm[8].y > lm[5].y && lm[12].y > lm[9].y && lm[16].y > lm[13].y;
+        
+        if (isFist) {
+            cube.visible = false;
+        } else {
+            cube.visible = true;
+
+            // --- GESTURE 2: Tracking (Move with Palm) ---
+            // Convert AI coords (0 to 1) to 3D world coords
+            const x = (0.5 - lm[9].x) * 10; 
+            const y = (0.5 - lm[9].y) * 6;
+            cube.position.x = x;
+            cube.position.y = y;
+
+            // --- GESTURE 3: Zoom In/Out (Depth) ---
+            // Distance between thumb(4) and pinky(20)
+            const d = Math.sqrt(Math.pow(lm[4].x - lm[20].x, 2) + Math.pow(lm[4].y - lm[20].y, 2));
+            const scale = d * 10; // Adjust multiplier for sensitivity
+            cube.scale.set(scale, scale, scale);
+
+            // Auto Rotation for 3D effect
+            cube.rotation.x += 0.05;
+            cube.rotation.y += 0.05;
+        }
+    }
+
+    // Animation Loop
+    function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+    }
+
+    startAI();
+    animate();
+
+    // Handle Resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
 </body>
 </html>
