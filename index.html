@@ -2,134 +2,90 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>UZAIR - PHANTOM KEY</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body { margin: 0; background: #000; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-        #v { position: fixed; opacity: 0.2; transform: scaleX(-1); width: 100%; height: 100%; object-fit: cover; }
-        #ui { position: relative; z-index: 10; text-align: center; background: rgba(0,0,0,0.7); padding: 20px; border-radius: 20px; border: 1px solid #333; }
-        .dots-container { display: flex; gap: 15px; justify-content: center; margin: 20px 0; }
-        .dot { width: 15px; height: 15px; border-radius: 50%; border: 2px solid #555; transition: all 0.3s; }
-        .active { background: #00ff41; border-color: #00ff41; box-shadow: 0 0 15px #00ff41; }
-        .error { border-color: #ff3b30; background: #ff3b30; }
-        #status { font-size: 14px; color: #888; margin-top: 10px; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, sans-serif; }
+        
+        /* Wallpaper */
+        #lock-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1964&auto=format&fit=crop') center/cover;
+            z-index: 100; transition: transform 0.8s cubic-bezier(0.45, 0.05, 0.55, 0.95);
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+        }
+
+        /* Clock */
+        #time { color: white; font-size: 80px; font-weight: 200; margin-top: 80px; text-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        #date { color: white; font-size: 20px; margin-top: -10px; }
+
+        /* Fake Home Screen (Desktop) */
+        #home-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: url('https://images.unsplash.com/photo-1614850523296-e8c041de2394?q=80&w=2070&auto=format&fit=crop') center/cover;
+            display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(6, 1fr);
+            padding: 20px; box-sizing: border-box; gap: 20px;
+        }
+
+        .icon { width: 60px; height: 60px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 15px; margin: 0 auto; }
+        
+        #v { position: fixed; opacity: 0; pointer-events: none; }
+        .unlocked { transform: translateY(-100%); }
     </style>
 </head>
 <body>
     <video id="v" autoplay playsinline></video>
 
-    <div id="ui">
-        <h2 id="header">SECURE ACCESS</h2>
-        <div class="dots-container">
-            <div id="d1" class="dot"></div>
-            <div id="d2" class="dot"></div>
-            <div id="d3" class="dot"></div>
+    <div id="lock-screen">
+        <div id="time">12:45</div>
+        <div id="date">Friday, 20 February</div>
+        <div style="position: absolute; bottom: 50px; color: rgba(255,255,255,0.7); font-size: 14px;">
+            Pinch in Air to Unlock
         </div>
-        <div id="feedback">WAITING FOR GESTURE...</div>
-        <div id="status">AI LOADING...</div>
+    </div>
+
+    <div id="home-screen">
+        <div class="icon"></div><div class="icon"></div><div class="icon"></div><div class="icon"></div>
+        <div class="icon"></div><div class="icon"></div><div class="icon"></div><div class="icon"></div>
     </div>
 
 <script>
-    const video = document.getElementById('v');
-    const status = document.getElementById('status');
-    const feedback = document.getElementById('feedback');
-    let passSequence = [];
-    let isCoolingDown = false;
+    const lockScreen = document.getElementById('lock-screen');
+    const timeDisplay = document.getElementById('time');
 
-    async function setupAI() {
+    // Update Real Time
+    setInterval(() => {
+        const now = new Date();
+        timeDisplay.innerText = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
+    }, 1000);
+
+    async function initAI() {
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.8 });
         
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.7
+        hands.onResults(res => {
+            if (!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) return;
+            const lm = res.multiHandLandmarks[0];
+
+            // PINCH GESTURE LOGIC (Index + Thumb)
+            const dist = Math.sqrt(Math.pow(lm[8].x - lm[4].x, 2) + Math.pow(lm[8].y - lm[4].y, 2));
+            
+            if (dist < 0.04) {
+                lockScreen.classList.add('unlocked');
+                // Vibrating effect for realism
+                if (navigator.vibrate) navigator.vibrate(50);
+            }
         });
 
-        hands.onResults(onResults);
-
-        const camera = new Camera(video, {
-            onFrame: async () => {
-                await hands.send({image: video});
-            },
+        const cam = new Camera(document.getElementById('v'), {
+            onFrame: async () => await hands.send({image: document.getElementById('v')}),
             width: 640, height: 480
         });
-
-        camera.start().then(() => {
-            status.innerText = "SYSTEM ACTIVE: SHOW GESTURES";
-        }).catch(err => {
-            status.innerText = "CAMERA ERROR: USE HTTPS";
-            console.error(err);
-        });
+        cam.start();
     }
 
-    function onResults(results) {
-        if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0 || isCoolingDown) return;
-
-        const lm = results.multiHandLandmarks[0];
-        let gesture = "";
-
-        // Detection Logic
-        const isIndexUp = lm[8].y < lm[6].y;
-        const isMiddleUp = lm[12].y < lm[10].y;
-        const isRingUp = lm[16].y < lm[14].y;
-
-        // V-Sign (Index & Middle Up)
-        if (isIndexUp && isMiddleUp && !isRingUp) gesture = "V";
-        // Fist (All Down)
-        else if (!isIndexUp && !isMiddleUp && !isRingUp) gesture = "FIST";
-        // Palm (All Up)
-        else if (isIndexUp && isMiddleUp && isRingUp) gesture = "PALM";
-
-        if (gesture && (passSequence.length === 0 || passSequence[passSequence.length - 1] !== gesture)) {
-            captureGesture(gesture);
-        }
-    }
-
-    function captureGesture(g) {
-        passSequence.push(g);
-        isCoolingDown = true;
-        
-        // Update Dots
-        const currentDot = document.getElementById('d' + passSequence.length);
-        if (currentDot) currentDot.classList.add('active');
-        
-        feedback.innerText = "CAPTURED: " + g;
-
-        if (passSequence.length === 3) {
-            checkPassword();
-        } else {
-            setTimeout(() => { isCoolingDown = false; }, 1000);
-        }
-    }
-
-    function checkPassword() {
-        // Correct Pattern: V-Sign -> Fist -> Palm
-        if (passSequence[0] === "V" && passSequence[1] === "FIST" && passSequence[2] === "PALM") {
-            feedback.innerText = "ACCESS GRANTED!";
-            document.getElementById('header').innerText = "WELCOME UZAIR";
-            feedback.style.color = "#00ff41";
-        } else {
-            feedback.innerText = "WRONG PATTERN!";
-            document.querySelectorAll('.dot').forEach(d => d.classList.add('error'));
-            setTimeout(reset, 2000);
-        }
-    }
-
-    function reset() {
-        passSequence = [];
-        isCoolingDown = false;
-        document.querySelectorAll('.dot').forEach(d => {
-            d.classList.remove('active');
-            d.classList.remove('error');
-        });
-        feedback.innerText = "WAITING FOR GESTURE...";
-        feedback.style.color = "#00ff41";
-    }
-
-    window.onload = setupAI;
+    initAI();
 </script>
 </body>
 </html>
