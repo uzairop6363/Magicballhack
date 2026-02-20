@@ -3,35 +3,54 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>C9 UZAIR - HAND TRACKING BALL</title>
+    <title>C9 UZAIR - BRIGHT MAGIC</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
-        #v { position: fixed; width: 100%; height: 100%; object-fit: cover; opacity: 0.3; transform: scaleX(-1); }
+        
+        /* Brightness Fix Here */
+        #v { 
+            position: fixed; 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+            opacity: 1; /* Full Brightness */
+            transform: scaleX(-1);
+            filter: brightness(1.1) contrast(1.1); /* Extra Clarity */
+        }
         
         #ball {
-            width: 80px; height: 80px; background: url('https://cdn-icons-png.flaticon.com/512/532/532495.png');
+            width: 80px; height: 80px; 
+            background: url('https://cdn-icons-png.flaticon.com/512/532/532495.png');
             background-size: cover; position: absolute; 
-            filter: drop-shadow(0 0 15px #00ff41);
+            filter: drop-shadow(0 0 20px #00ff41);
             display: none; z-index: 100; pointer-events: none;
         }
 
         #ui { position: fixed; top: 20px; width: 100%; text-align: center; z-index: 200; }
-        .stat { color: #00ff41; font-weight: bold; font-size: 14px; text-shadow: 0 0 5px #000; }
+        .stat { 
+            background: rgba(0,0,0,0.6); 
+            display: inline-block; 
+            padding: 5px 15px; 
+            border-radius: 20px; 
+            color: #00ff41; 
+            font-weight: bold; 
+            font-size: 14px; 
+        }
         
         .btn-box { position: fixed; bottom: 40px; width: 100%; display: flex; justify-content: center; gap: 10px; z-index: 300; }
-        button { padding: 15px 25px; border-radius: 12px; border: none; font-weight: bold; }
+        button { padding: 15px 25px; border-radius: 12px; border: none; font-weight: bold; font-size: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         .primary { background: #00ff41; color: #000; }
-        .secondary { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid #fff; }
+        .secondary { background: #fff; color: #000; }
     </style>
 </head>
 <body>
     <video id="v" autoplay playsinline></video>
     <div id="ball"></div>
-    <div id="ui"><div id="msg" class="stat">CONNECTING...</div></div>
+    <div id="ui"><div id="msg" class="stat">AI SYSTEM READY</div></div>
     
     <div class="btn-box" id="setup">
         <button class="primary" onclick="init(true)">PHONE A (Sender)</button>
@@ -42,12 +61,13 @@
     const ball = document.getElementById('ball');
     const msg = document.getElementById('msg');
     let hasBall = false;
-    let ballInAir = false; // Is ball travelling in network?
+    let ballInAir = false;
     
+    // MQTT Setup
     let client = mqtt.connect('wss://test.mosquitto.org:8081/mqtt');
-    let topic = "uzair/magic/track/101"; 
+    let topic = "uzair/magic/track/999"; 
 
-    client.on('connect', () => { msg.innerText = "NETWORK READY"; client.subscribe(topic); });
+    client.on('connect', () => { msg.innerText = "NETWORK LINKED"; client.subscribe(topic); });
 
     client.on('message', (t, m) => {
         let cmd = m.toString();
@@ -55,19 +75,20 @@
             ballInAir = true; 
             hasBall = false;
             gsap.to(ball, {scale: 0, duration: 0.3, onComplete: () => ball.style.display='none'});
-            msg.innerText = "BALL IS IN AIR...";
+            msg.innerText = "BALL IS IN THE AIR...";
         }
         if(cmd === "CAUGHT") { 
             ballInAir = false;
-            // If I am not the one who caught it, I shouldn't show it
             msg.innerText = "OTHER PHONE CAUGHT IT";
         }
     });
 
     async function init(first) {
         document.getElementById('setup').style.display = 'none';
+        msg.innerText = "LOADING AI CAMERA...";
+        
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7});
+        hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6});
         hands.onResults(gotHands);
 
         const cam = new Camera(document.getElementById('v'), {
@@ -78,10 +99,10 @@
         if(first) {
             hasBall = true;
             ball.style.display = 'block';
-            msg.innerText = "YOU HAVE THE BALL";
+            msg.innerText = "HAVE BALL - CLOSE FIST";
         } else {
             hasBall = false;
-            msg.innerText = "WAITING FOR BALL...";
+            msg.innerText = "WAITING - OPEN HAND";
         }
         
         cam.start();
@@ -92,37 +113,35 @@
         if(!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) return;
         
         let lm = res.multiHandLandmarks[0];
-        // 9 is the middle of the palm
+        // Tracking Ball on Palm
         let x = (1 - lm[9].x) * window.innerWidth;
         let y = lm[9].y * window.innerHeight;
 
-        // Move ball to follow hand
         if(hasBall) {
             gsap.to(ball, {left: x - 40, top: y - 40, duration: 0.1});
         }
 
+        // Gesture Detection
         let isFist = lm[8].y > lm[6].y && lm[12].y > lm[10].y;
         let isOpen = lm[8].y < lm[6].y && lm[12].y < lm[10].y;
         let now = Date.now();
 
         if(now - lastAction < 2000) return;
 
-        // Logic: Only send if you have it
         if(hasBall && isFist) {
             lastAction = now;
             hasBall = false;
             client.publish(topic, "SENT");
-            msg.innerText = "BALL SENT!";
+            msg.innerText = "SENT!";
         } 
-        // Logic: Only catch if it's in the air
         else if(!hasBall && ballInAir && isOpen) {
             lastAction = now;
             hasBall = true;
             ballInAir = false;
             ball.style.display = 'block';
-            gsap.fromTo(ball, {scale: 0}, {scale: 1, duration: 0.4});
+            gsap.fromTo(ball, {scale: 0}, {scale: 1.2, duration: 0.4, ease: "back.out"});
             client.publish(topic, "CAUGHT");
-            msg.innerText = "CAUGHT IT!";
+            msg.innerText = "CAUGHT!";
         }
     }
 </script>
