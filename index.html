@@ -1,95 +1,66 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>C9 UZAIR - AIR SCROLLER</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <style>
-        body { margin: 0; background: #000; color: white; overflow: hidden; font-family: sans-serif; }
-        #v { position: fixed; bottom: 10px; right: 10px; width: 120px; height: 90px; border-radius: 10px; border: 2px solid #00ff41; object-fit: cover; transform: scaleX(-1); z-index: 1000; }
+        body { margin: 0; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; color: #00ff41; font-family: 'Courier New', Courier, monospace; }
+        #v { position: fixed; opacity: 0; pointer-events: none; }
         
-        /* Simulated TikTok Feed */
-        #feed { height: 100vh; overflow-y: hidden; scroll-behavior: smooth; }
-        .video-box { height: 100vh; width: 100%; display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: bold; border-bottom: 2px solid #222; position: relative; }
-        .video-box:nth-child(odd) { background: #111; }
-        .video-box:nth-child(even) { background: #000; }
+        /* The Magic Object */
+        #object {
+            width: 150px; height: 150px;
+            background: radial-gradient(circle, #00ff41, #004411);
+            border-radius: 20px;
+            box-shadow: 0 0 50px #00ff41;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 80px; font-weight: bold; color: black;
+            transform: scale(1);
+        }
 
-        #status { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,255,65,0.2); padding: 10px 20px; border-radius: 30px; border: 1px solid #00ff41; color: #00ff41; z-index: 100; font-weight: bold; }
+        #ui { position: fixed; top: 20px; font-weight: bold; letter-spacing: 2px; }
+        .radar { position: fixed; border: 1px solid #00ff41; border-radius: 50%; opacity: 0.3; }
     </style>
 </head>
 <body>
-
     <video id="v" autoplay playsinline></video>
-    <div id="status">HAND SENSOR ACTIVE</div>
+    <div id="ui">SYSTEM: TELEKINESIS ACTIVE</div>
+    <div id="object">⚡</div>
 
-    <div id="feed">
-        <div class="video-box">🔥 VIDEO 1 (Scroll Down)</div>
-        <div class="video-box">😎 VIDEO 2</div>
-        <div class="video-box">⚡ VIDEO 3</div>
-        <div class="video-box">👑 VIDEO 4</div>
-    </div>
+    <script>
+        const obj = document.getElementById('object');
+        const msg = document.getElementById('ui');
 
-<script>
-    const feed = document.getElementById('feed');
-    const msg = document.getElementById('status');
-    let currentVideo = 0;
-    let canScroll = true;
+        async function initMagic() {
+            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
 
-    async function startAI() {
-        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7});
-        hands.onResults(onResults);
-
-        const cam = new Camera(document.getElementById('v'), {
-            onFrame: async () => await hands.send({image: document.getElementById('v')}),
-            width: 640, height: 480
-        });
-        cam.start();
-    }
-
-    let startY = null;
-
-    function onResults(res) {
-        if (!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) {
-            startY = null;
-            return;
-        }
-
-        // 9 is the middle of the palm
-        let currentY = res.multiHandLandmarks[0][9].y;
-
-        if (startY !== null && canScroll) {
-            let diff = currentY - startY;
-
-            // Sensitivity for Up/Down scroll
-            if (Math.abs(diff) > 0.15) {
-                if (diff > 0) scrollFeed("DOWN"); // Moving hand down = scroll up
-                else scrollFeed("UP"); // Moving hand up = scroll down
+            hands.onResults(res => {
+                if(!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) {
+                    msg.innerText = "SEARCHING FOR JEDI...";
+                    return;
+                }
                 
-                canScroll = false;
-                setTimeout(() => { canScroll = true; }, 1000); 
-            }
+                let lm = res.multiHandLandmarks[0];
+                // Hand depth logic: Distance between thumb (4) and pinky (20)
+                let width = Math.sqrt(Math.pow(lm[4].x - lm[20].x, 2) + Math.pow(lm[4].y - lm[20].y, 2));
+                
+                // Scale the object based on hand width
+                let s = gsap.utils.mapRange(0.1, 0.5, 0.5, 3.5, width);
+                gsap.to(obj, { scale: s, rotation: width * 500, duration: 0.2 });
+                
+                msg.innerText = "FORCE LEVEL: " + Math.round(s * 100) + "%";
+            });
+
+            const cam = new Camera(document.getElementById('v'), {
+                onFrame: async () => await hands.send({image: document.getElementById('v')}),
+                width: 1280, height: 720
+            });
+            cam.start();
         }
-        startY = currentY;
-    }
 
-    function scrollFeed(dir) {
-        if (dir === "UP" && currentVideo < 3) {
-            currentVideo++;
-            msg.innerText = "SCROLLING UP ⬆️";
-        } else if (dir === "DOWN" && currentVideo > 0) {
-            currentVideo--;
-            msg.innerText = "SCROLLING DOWN ⬇️";
-        }
-
-        feed.scrollTo({ top: currentVideo * window.innerHeight, behavior: 'smooth' });
-        
-        setTimeout(() => { msg.innerText = "HAND SENSOR ACTIVE"; }, 1000);
-    }
-
-    startAI();
-</script>
+        initMagic();
+    </script>
 </body>
 </html>
