@@ -1,83 +1,135 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>C9 UZAIR - DEBUG MODE</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>UZAIR - PHANTOM KEY</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body { margin: 0; background: #000; color: #00ff41; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-        #v { position: fixed; opacity: 0; }
-        #debug-log { background: rgba(255,0,0,0.1); padding: 20px; border: 1px solid #333; width: 80%; max-height: 200px; overflow-y: auto; font-size: 12px; }
-        .box { width: 100px; height: 100px; border: 2px solid #fff; transition: 0.2s; }
-        .success { border-color: #00ff41; background: rgba(0,255,65,0.2); }
+        body { margin: 0; background: #000; color: #00ff41; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        #v { position: fixed; opacity: 0.2; transform: scaleX(-1); width: 100%; height: 100%; object-fit: cover; }
+        #ui { position: relative; z-index: 10; text-align: center; background: rgba(0,0,0,0.7); padding: 20px; border-radius: 20px; border: 1px solid #333; }
+        .dots-container { display: flex; gap: 15px; justify-content: center; margin: 20px 0; }
+        .dot { width: 15px; height: 15px; border-radius: 50%; border: 2px solid #555; transition: all 0.3s; }
+        .active { background: #00ff41; border-color: #00ff41; box-shadow: 0 0 15px #00ff41; }
+        .error { border-color: #ff3b30; background: #ff3b30; }
+        #status { font-size: 14px; color: #888; margin-top: 10px; }
     </style>
 </head>
 <body>
     <video id="v" autoplay playsinline></video>
-    
-    <h2>SYSTEM STATUS</h2>
-    <div id="debug-log">Initalizing AI... Please wait.</div>
-    
-    <div id="visual-box" class="box" style="margin-top: 20px;"></div>
-    <p>Sign: V-Sign (Victory) to Test</p>
+
+    <div id="ui">
+        <h2 id="header">SECURE ACCESS</h2>
+        <div class="dots-container">
+            <div id="d1" class="dot"></div>
+            <div id="d2" class="dot"></div>
+            <div id="d3" class="dot"></div>
+        </div>
+        <div id="feedback">WAITING FOR GESTURE...</div>
+        <div id="status">AI LOADING...</div>
+    </div>
 
 <script>
-    const log = document.getElementById('debug-log');
-    const visualBox = document.getElementById('visual-box');
+    const video = document.getElementById('v');
+    const status = document.getElementById('status');
+    const feedback = document.getElementById('feedback');
+    let passSequence = [];
+    let isCoolingDown = false;
 
-    function printLog(msg) {
-        log.innerHTML += "<br>> " + msg;
-        log.scrollTop = log.scrollHeight;
+    async function setupAI() {
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
+        });
+
+        hands.onResults(onResults);
+
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                await hands.send({image: video});
+            },
+            width: 640, height: 480
+        });
+
+        camera.start().then(() => {
+            status.innerText = "SYSTEM ACTIVE: SHOW GESTURES";
+        }).catch(err => {
+            status.innerText = "CAMERA ERROR: USE HTTPS";
+            console.error(err);
+        });
     }
 
-    async function startSystem() {
-        try {
-            printLog("Loading MediaPipe Hands...");
-            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-            
-            hands.setOptions({
-                maxNumHands: 1,
-                modelComplexity: 1,
-                minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
-            });
+    function onResults(results) {
+        if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0 || isCoolingDown) return;
 
-            hands.onResults(results => {
-                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                    const lm = results.multiHandLandmarks[0];
-                    // Victory Sign Logic
-                    const isV = lm[8].y < lm[6].y && lm[12].y < lm[10].y && lm[16].y > lm[14].y;
-                    
-                    if (isV) {
-                        visualBox.classList.add('success');
-                        printLog("V-SIGN DETECTED!");
-                    } else {
-                        visualBox.classList.remove('success');
-                    }
-                }
-            });
+        const lm = results.multiHandLandmarks[0];
+        let gesture = "";
 
-            printLog("Starting Camera...");
-            const cam = new Camera(document.getElementById('v'), {
-                onFrame: async () => {
-                    await hands.send({image: document.getElementById('v')});
-                },
-                width: 640,
-                height: 480
-            });
+        // Detection Logic
+        const isIndexUp = lm[8].y < lm[6].y;
+        const isMiddleUp = lm[12].y < lm[10].y;
+        const isRingUp = lm[16].y < lm[14].y;
 
-            cam.start().then(() => {
-                printLog("Camera ACTIVE. AI is watching...");
-            }).catch(err => {
-                printLog("CAMERA ERROR: " + err);
-            });
+        // V-Sign (Index & Middle Up)
+        if (isIndexUp && isMiddleUp && !isRingUp) gesture = "V";
+        // Fist (All Down)
+        else if (!isIndexUp && !isMiddleUp && !isRingUp) gesture = "FIST";
+        // Palm (All Up)
+        else if (isIndexUp && isMiddleUp && isRingUp) gesture = "PALM";
 
-        } catch (error) {
-            printLog("CRITICAL ERROR: " + error);
+        if (gesture && (passSequence.length === 0 || passSequence[passSequence.length - 1] !== gesture)) {
+            captureGesture(gesture);
         }
     }
 
-    window.onload = startSystem;
+    function captureGesture(g) {
+        passSequence.push(g);
+        isCoolingDown = true;
+        
+        // Update Dots
+        const currentDot = document.getElementById('d' + passSequence.length);
+        if (currentDot) currentDot.classList.add('active');
+        
+        feedback.innerText = "CAPTURED: " + g;
+
+        if (passSequence.length === 3) {
+            checkPassword();
+        } else {
+            setTimeout(() => { isCoolingDown = false; }, 1000);
+        }
+    }
+
+    function checkPassword() {
+        // Correct Pattern: V-Sign -> Fist -> Palm
+        if (passSequence[0] === "V" && passSequence[1] === "FIST" && passSequence[2] === "PALM") {
+            feedback.innerText = "ACCESS GRANTED!";
+            document.getElementById('header').innerText = "WELCOME UZAIR";
+            feedback.style.color = "#00ff41";
+        } else {
+            feedback.innerText = "WRONG PATTERN!";
+            document.querySelectorAll('.dot').forEach(d => d.classList.add('error'));
+            setTimeout(reset, 2000);
+        }
+    }
+
+    function reset() {
+        passSequence = [];
+        isCoolingDown = false;
+        document.querySelectorAll('.dot').forEach(d => {
+            d.classList.remove('active');
+            d.classList.remove('error');
+        });
+        feedback.innerText = "WAITING FOR GESTURE...";
+        feedback.style.color = "#00ff41";
+    }
+
+    window.onload = setupAI;
 </script>
 </body>
 </html>
