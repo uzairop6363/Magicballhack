@@ -6,43 +6,38 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, sans-serif; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: sans-serif; }
         
         /* Wallpaper */
         #lock-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1964&auto=format&fit=crop') center/cover;
-            z-index: 100; transition: transform 0.8s cubic-bezier(0.45, 0.05, 0.55, 0.95);
-            display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+            z-index: 100; transition: transform 0.6s ease-in-out;
+            display: flex; flex-direction: column; align-items: center;
         }
 
-        /* Clock */
-        #time { color: white; font-size: 80px; font-weight: 200; margin-top: 80px; text-shadow: 0 0 20px rgba(0,0,0,0.5); }
-        #date { color: white; font-size: 20px; margin-top: -10px; }
+        #time { color: white; font-size: 85px; font-weight: 200; margin-top: 100px; }
+        #status { position: fixed; bottom: 40px; color: #00ff41; font-family: monospace; font-size: 12px; z-index: 101; }
 
-        /* Fake Home Screen (Desktop) */
+        /* Fake Desktop */
         #home-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: url('https://images.unsplash.com/photo-1614850523296-e8c041de2394?q=80&w=2070&auto=format&fit=crop') center/cover;
-            display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(6, 1fr);
-            padding: 20px; box-sizing: border-box; gap: 20px;
+            display: grid; grid-template-columns: repeat(4, 1fr); padding: 30px; gap: 20px;
         }
+        .icon { width: 55px; height: 55px; background: rgba(255,255,255,0.25); border-radius: 12px; backdrop-filter: blur(5px); }
 
-        .icon { width: 60px; height: 60px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 15px; margin: 0 auto; }
-        
-        #v { position: fixed; opacity: 0; pointer-events: none; }
-        .unlocked { transform: translateY(-100%); }
+        #v { position: fixed; opacity: 0; }
+        .unlocked { transform: translateY(-100%) !important; }
     </style>
 </head>
 <body>
     <video id="v" autoplay playsinline></video>
+    <div id="status">AI LOADING...</div>
 
     <div id="lock-screen">
-        <div id="time">12:45</div>
-        <div id="date">Friday, 20 February</div>
-        <div style="position: absolute; bottom: 50px; color: rgba(255,255,255,0.7); font-size: 14px;">
-            Pinch in Air to Unlock
-        </div>
+        <div id="time">10:07</div>
+        <p style="color:white; opacity:0.8;">Friday, Feb 20</p>
     </div>
 
     <div id="home-screen">
@@ -51,41 +46,43 @@
     </div>
 
 <script>
-    const lockScreen = document.getElementById('lock-screen');
-    const timeDisplay = document.getElementById('time');
+    const lock = document.getElementById('lock-screen');
+    const status = document.getElementById('status');
 
-    // Update Real Time
-    setInterval(() => {
-        const now = new Date();
-        timeDisplay.innerText = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
-    }, 1000);
-
-    async function initAI() {
+    async function startAI() {
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.8 });
         
-        hands.onResults(res => {
-            if (!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) return;
-            const lm = res.multiHandLandmarks[0];
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 0, // 0 is faster for mobile
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
 
-            // PINCH GESTURE LOGIC (Index + Thumb)
-            const dist = Math.sqrt(Math.pow(lm[8].x - lm[4].x, 2) + Math.pow(lm[8].y - lm[4].y, 2));
-            
-            if (dist < 0.04) {
-                lockScreen.classList.add('unlocked');
-                // Vibrating effect for realism
-                if (navigator.vibrate) navigator.vibrate(50);
+        hands.onResults(results => {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                status.innerText = "HAND DETECTED! UNLOCKING...";
+                lock.classList.add('unlocked');
+                
+                // Audio effect for video
+                let synth = window.speechSynthesis;
+                if(!lock.dataset.played) {
+                    // Chutki ya unlock ki awaz ka illusion
+                    navigator.vibrate(100);
+                    lock.dataset.played = "true";
+                }
             }
         });
 
         const cam = new Camera(document.getElementById('v'), {
-            onFrame: async () => await hands.send({image: document.getElementById('v')}),
-            width: 640, height: 480
+            onFrame: async () => { await hands.send({image: document.getElementById('v')}); },
+            width: 480, height: 360
         });
-        cam.start();
+        
+        cam.start().then(() => status.innerText = "READY: SHOW HAND TO UNLOCK");
     }
 
-    initAI();
+    window.onload = startAI;
 </script>
 </body>
 </html>
