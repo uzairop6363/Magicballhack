@@ -2,91 +2,89 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>C9 UZAIR - 360 ROTATION AI</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <title>C9 UZAIR - AIR TYPER</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; }
+        body { margin: 0; background: #050505; color: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
         #v { position: fixed; opacity: 0; pointer-events: none; }
-        #ui { 
-            position: fixed; top: 20px; width: 100%; text-align: center;
-            color: #00ff41; font-family: 'Courier New', monospace; font-size: 14px;
-            text-transform: uppercase; letter-spacing: 2px; z-index: 100;
+        
+        /* Glassmorphism Text Box */
+        #container {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 80%; max-width: 500px; padding: 30px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(15px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            text-align: center;
         }
+
+        #text-box {
+            font-size: 32px; font-weight: 500; min-height: 50px;
+            color: #00ff41; text-shadow: 0 0 10px rgba(0,255,65,0.5);
+            margin-bottom: 20px; word-wrap: break-word;
+        }
+
+        .cursor { display: inline-block; width: 3px; height: 35px; background: #00ff41; animation: blink 0.8s infinite; vertical-align: middle; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        #pointer {
+            position: fixed; width: 20px; height: 20px;
+            background: rgba(0, 255, 65, 0.5); border: 2px solid #fff;
+            border-radius: 50%; pointer-events: none; z-index: 1000;
+            box-shadow: 0 0 15px #00ff41; transition: transform 0.1s;
+        }
+
+        #hud { position: fixed; top: 20px; width: 100%; text-align: center; color: #555; font-size: 12px; letter-spacing: 2px; }
     </style>
 </head>
 <body>
-    <div id="ui">MODE: TRACKING</div>
     <video id="v" autoplay playsinline></video>
+    <div id="pointer"></div>
+    <div id="hud">SYSTEM: AIR_INPUT_ON | TRACKING_INDEX_FINGER</div>
+
+    <div id="container">
+        <div id="text-box"><span id="output"></span><span class="cursor"></span></div>
+        <div style="color: #888; font-size: 14px;">Pinch (Index + Thumb) to Type "UZAIR"</div>
+    </div>
 
 <script>
-    // --- THREE.JS SETUP ---
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+    const output = document.getElementById('output');
+    const pointer = document.getElementById('pointer');
+    let fullText = "UZAIR ";
+    let currentPos = 0;
+    let isCoolingDown = false;
 
-    const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
-    const material = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 });
-    const cube = new THREE.Mesh(geometry, material);
-    
-    const edges = new THREE.EdgesGeometry(geometry);
-    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ff41, linewidth: 2 }));
-    cube.add(line);
-    scene.add(cube);
-    camera.position.z = 5;
-
-    let isRotating = false;
-    let prevHandPos = { x: 0, y: 0 };
-
-    // --- AI ENGINE ---
-    async function initAI() {
+    async function initAirTyper() {
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
         hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.8 });
         
         hands.onResults(results => {
-            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-                cube.visible = false;
-                return;
-            }
-            cube.visible = true;
+            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+            
             const lm = results.multiHandLandmarks[0];
-            const ui = document.getElementById('ui');
+            
+            // 1. Finger Tracking (Pointer)
+            // Index finger tip is landmark 8
+            const x = (1 - lm[8].x) * window.innerWidth;
+            const y = lm[8].y * window.innerHeight;
+            pointer.style.left = x + 'px';
+            pointer.style.top = y + 'px';
 
-            // 1. PINCH GESTURE LOGIC (Index Tip & Thumb Tip distance)
+            // 2. Typing Gesture (Pinch: Index + Thumb)
             const dist = Math.sqrt(Math.pow(lm[8].x - lm[4].x, 2) + Math.pow(lm[8].y - lm[4].y, 2));
             
-            if (dist < 0.05) {
-                // ROTATION MODE
-                isRotating = true;
-                ui.innerText = "MODE: 360° ROTATION";
-                ui.style.color = "#ff3b30";
-
-                let moveX = (lm[9].x - prevHandPos.x) * 10;
-                let moveY = (lm[9].y - prevHandPos.y) * 10;
-
-                cube.rotation.y += moveX;
-                cube.rotation.x += moveY;
-            } else {
-                // TRACKING MODE
-                isRotating = false;
-                ui.innerText = "MODE: TRACKING";
-                ui.style.color = "#00ff41";
-
-                const targetX = (0.5 - lm[9].x) * 10;
-                const targetY = (0.5 - lm[9].y) * 6;
-                cube.position.x += (targetX - cube.position.x) * 0.1;
-                cube.position.y += (targetY - cube.position.y) * 0.1;
-
-                // Zoom logic
-                const zoomDist = Math.sqrt(Math.pow(lm[4].x - lm[20].x, 2) + Math.pow(lm[4].y - lm[20].y, 2));
-                const s = zoomDist * 10;
-                cube.scale.set(s, s, s);
+            if (dist < 0.04 && !isCoolingDown) {
+                typeLetter();
+                isCoolingDown = true;
+                pointer.style.transform = "scale(0.5)";
+                setTimeout(() => { 
+                    isCoolingDown = false; 
+                    pointer.style.transform = "scale(1)";
+                }, 300); // Typing speed limit
             }
-            
-            prevHandPos = { x: lm[9].x, y: lm[9].y };
         });
 
         const cam = new Camera(document.getElementById('v'), {
@@ -96,16 +94,17 @@
         cam.start();
     }
 
-    function animate() {
-        requestAnimationFrame(animate);
-        if(!isRotating) {
-            cube.rotation.y += 0.01; // Auto rotation when not controlled
+    function typeLetter() {
+        if (currentPos < fullText.length) {
+            output.innerText += fullText[currentPos];
+            currentPos++;
+        } else {
+            currentPos = 0; // Reset or stop
+            output.innerText = ""; // Clear for next video take
         }
-        renderer.render(scene, camera);
     }
 
-    initAI();
-    animate();
+    initAirTyper();
 </script>
 </body>
 </html>
