@@ -1,94 +1,83 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>C9 UZAIR - GESTURE LOCK</title>
+    <title>C9 UZAIR - DEBUG MODE</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body { margin: 0; background: #000; color: #fff; font-family: 'Courier New', monospace; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        body { margin: 0; background: #000; color: #00ff41; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
         #v { position: fixed; opacity: 0; }
-        #lock-screen { text-align: center; }
-        .dot { display: inline-block; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #333; margin: 10px; transition: 0.3s; }
-        .active { background: #00ff41; border-color: #00ff41; box-shadow: 0 0 15px #00ff41; }
-        #msg { font-size: 20px; margin-top: 20px; color: #ff3b30; }
+        #debug-log { background: rgba(255,0,0,0.1); padding: 20px; border: 1px solid #333; width: 80%; max-height: 200px; overflow-y: auto; font-size: 12px; }
+        .box { width: 100px; height: 100px; border: 2px solid #fff; transition: 0.2s; }
+        .success { border-color: #00ff41; background: rgba(0,255,65,0.2); }
     </style>
 </head>
 <body>
     <video id="v" autoplay playsinline></video>
-
-    <div id="lock-screen">
-        <h2 id="title">ENTER PHANTOM KEY</h2>
-        <div id="dots">
-            <div class="dot" id="d1"></div>
-            <div class="dot" id="d2"></div>
-            <div class="dot" id="d3"></div>
-        </div>
-        <div id="msg">LOCKED</div>
-    </div>
+    
+    <h2>SYSTEM STATUS</h2>
+    <div id="debug-log">Initalizing AI... Please wait.</div>
+    
+    <div id="visual-box" class="box" style="margin-top: 20px;"></div>
+    <p>Sign: V-Sign (Victory) to Test</p>
 
 <script>
-    let sequence = [];
-    let canCapture = true;
+    const log = document.getElementById('debug-log');
+    const visualBox = document.getElementById('visual-box');
 
-    async function initLock() {
-        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.8 });
-        
-        hands.onResults(res => {
-            if (!res.multiHandLandmarks || res.multiHandLandmarks.length === 0 || !canCapture) return;
-            const lm = res.multiHandLandmarks[0];
-
-            // 1. Detect Gestures
-            let currentGesture = "";
-            const isFist = lm[8].y > lm[6].y && lm[12].y > lm[10].y;
-            const isV = lm[8].y < lm[6].y && lm[12].y < lm[10].y && lm[16].y > lm[14].y;
-            const isIndex = lm[8].y < lm[6].y && lm[12].y > lm[10].y;
-
-            if (isV) currentGesture = "V";
-            else if (isFist) currentGesture = "FIST";
-            else if (isIndex) currentGesture = "INDEX";
-
-            if (currentGesture && sequence[sequence.length - 1] !== currentGesture) {
-                sequence.push(currentGesture);
-                updateDots();
-                checkSequence();
-                
-                canCapture = false; 
-                setTimeout(() => { canCapture = true; }, 1000); // 1 sec delay between signs
-            }
-        });
-
-        const cam = new Camera(document.getElementById('v'), {
-            onFrame: async () => await hands.send({image: document.getElementById('v')})
-        });
-        cam.start();
+    function printLog(msg) {
+        log.innerHTML += "<br>> " + msg;
+        log.scrollTop = log.scrollHeight;
     }
 
-    function updateDots() {
-        if (sequence.length <= 3) {
-            document.getElementById('d' + sequence.length).classList.add('active');
+    async function startSystem() {
+        try {
+            printLog("Loading MediaPipe Hands...");
+            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+            
+            hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            hands.onResults(results => {
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                    const lm = results.multiHandLandmarks[0];
+                    // Victory Sign Logic
+                    const isV = lm[8].y < lm[6].y && lm[12].y < lm[10].y && lm[16].y > lm[14].y;
+                    
+                    if (isV) {
+                        visualBox.classList.add('success');
+                        printLog("V-SIGN DETECTED!");
+                    } else {
+                        visualBox.classList.remove('success');
+                    }
+                }
+            });
+
+            printLog("Starting Camera...");
+            const cam = new Camera(document.getElementById('v'), {
+                onFrame: async () => {
+                    await hands.send({image: document.getElementById('v')});
+                },
+                width: 640,
+                height: 480
+            });
+
+            cam.start().then(() => {
+                printLog("Camera ACTIVE. AI is watching...");
+            }).catch(err => {
+                printLog("CAMERA ERROR: " + err);
+            });
+
+        } catch (error) {
+            printLog("CRITICAL ERROR: " + error);
         }
     }
 
-    function checkSequence() {
-        if (sequence.length === 3) {
-            // Correct Key: V -> INDEX -> FIST
-            if (sequence[0] === "V" && sequence[1] === "INDEX" && sequence[2] === "FIST") {
-                document.getElementById('msg').innerText = "ACCESS GRANTED - WELCOME UZAIR";
-                document.getElementById('msg').style.color = "#00ff41";
-                document.getElementById('title').innerText = "UNLOCKED";
-            } else {
-                document.getElementById('msg').innerText = "WRONG KEY - RESETTING...";
-                setTimeout(() => {
-                    sequence = [];
-                    document.querySelectorAll('.dot').forEach(d => d.classList.remove('active'));
-                    document.getElementById('msg').innerText = "LOCKED";
-                }, 1500);
-            }
-        }
-    }
-
-    initLock();
+    window.onload = startSystem;
 </script>
 </body>
 </html>
