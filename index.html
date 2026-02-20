@@ -6,71 +6,96 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: sans-serif; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, sans-serif; }
         
-        /* Wallpaper */
+        /* Lock Screen - Isko hum slide up karenge */
         #lock-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1964&auto=format&fit=crop') center/cover;
-            z-index: 100; transition: transform 0.6s ease-in-out;
+            background: url('https://w0.peakpx.com/wallpaper/559/541/HD-wallpaper-iphone-13-original-apple-stock-ios-15.jpg') center/cover;
+            z-index: 100; transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex; flex-direction: column; align-items: center;
         }
 
-        #time { color: white; font-size: 85px; font-weight: 200; margin-top: 100px; }
-        #status { position: fixed; bottom: 40px; color: #00ff41; font-family: monospace; font-size: 12px; z-index: 101; }
+        #time { color: white; font-size: 80px; font-weight: 200; margin-top: 100px; }
+        #date { color: white; font-size: 20px; margin-top: -10px; opacity: 0.9; }
 
-        /* Fake Desktop */
+        /* Real-Looking Home Screen */
         #home-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: url('https://images.unsplash.com/photo-1614850523296-e8c041de2394?q=80&w=2070&auto=format&fit=crop') center/cover;
-            display: grid; grid-template-columns: repeat(4, 1fr); padding: 30px; gap: 20px;
+            background: url('https://w0.peakpx.com/wallpaper/559/541/HD-wallpaper-iphone-13-original-apple-stock-ios-15.jpg') center/cover;
+            filter: saturate(1.2); display: flex; flex-direction: column; padding: 40px 20px; box-sizing: border-box;
         }
-        .icon { width: 55px; height: 55px; background: rgba(255,255,255,0.25); border-radius: 12px; backdrop-filter: blur(5px); }
 
-        #v { position: fixed; opacity: 0; }
-        .unlocked { transform: translateY(-100%) !important; }
+        .app-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 25px; margin-top: 20px; }
+        
+        .app { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        .app-icon { 
+            width: 60px; height: 60px; border-radius: 14px; 
+            background-size: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .app-name { color: white; font-size: 11px; font-weight: 400; text-shadow: 0 1px 2px #000; }
+
+        #v { position: fixed; opacity: 0; pointer-events: none; }
+        .unlocked { transform: translateY(-110%) !important; }
+        
+        /* Bottom Dock */
+        .dock {
+            position: absolute; bottom: 20px; left: 20px; right: 20px;
+            height: 85px; background: rgba(255,255,255,0.25);
+            backdrop-filter: blur(20px); border-radius: 30px;
+            display: flex; justify-content: space-around; align-items: center; padding: 0 10px;
+        }
     </style>
 </head>
 <body>
     <video id="v" autoplay playsinline></video>
-    <div id="status">AI LOADING...</div>
 
     <div id="lock-screen">
-        <div id="time">10:07</div>
-        <p style="color:white; opacity:0.8;">Friday, Feb 20</p>
+        <div id="time">10:09</div>
+        <div id="date">Friday, 20 February</div>
+        <div style="margin-top: auto; margin-bottom: 50px; color: white; font-size: 14px; opacity: 0.6;">Swipe or Gesture to Unlock</div>
     </div>
 
     <div id="home-screen">
-        <div class="icon"></div><div class="icon"></div><div class="icon"></div><div class="icon"></div>
-        <div class="icon"></div><div class="icon"></div><div class="icon"></div><div class="icon"></div>
+        <div class="app-grid">
+            <div class="app">
+                <div class="app-icon" style="background-image: url('https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg');"></div>
+                <div class="app-name">WhatsApp</div>
+            </div>
+            <div class="app">
+                <div class="app-icon" style="background-image: url('https://upload.wikimedia.org/wikipedia/commons/a/a5/Instagram_icon.png');"></div>
+                <div class="app-name">Instagram</div>
+            </div>
+            <div class="app">
+                <div class="app-icon" style="background-image: url('https://upload.wikimedia.org/wikipedia/en/a/a9/TikTok_logo.svg');"></div>
+                <div class="app-name">TikTok</div>
+            </div>
+            <div class="app">
+                <div class="app-icon" style="background-image: url('https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_full-color_icon_%282017%29.svg');"></div>
+                <div class="app-name">YouTube</div>
+            </div>
+        </div>
+
+        <div class="dock">
+            <div class="app-icon" style="width:55px; height:55px; background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Facebook_Logo_%282019%29.png/600px-Facebook_Logo_%282019%29.png');"></div>
+            <div class="app-icon" style="width:55px; height:55px; background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Google_Chrome_icon_%282022%29.svg/1200px-Google_Chrome_icon_%282022%29.svg.png');"></div>
+            <div class="app-icon" style="width:55px; height:55px; background-image: url('https://upload.wikimedia.org/wikipedia/commons/4/4e/Gmail_Icon.png');"></div>
+            <div class="app-icon" style="width:55px; height:55px; background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Slack_icon_2019.svg/2048px-Slack_icon_2019.svg.png');"></div>
+        </div>
     </div>
 
 <script>
     const lock = document.getElementById('lock-screen');
-    const status = document.getElementById('status');
 
     async function startAI() {
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 0, // 0 is faster for mobile
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
+        hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.6 });
 
         hands.onResults(results => {
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                status.innerText = "HAND DETECTED! UNLOCKING...";
+                // Unlock Animation
                 lock.classList.add('unlocked');
-                
-                // Audio effect for video
-                let synth = window.speechSynthesis;
-                if(!lock.dataset.played) {
-                    // Chutki ya unlock ki awaz ka illusion
-                    navigator.vibrate(100);
-                    lock.dataset.played = "true";
-                }
+                if (navigator.vibrate) navigator.vibrate(60);
             }
         });
 
@@ -78,8 +103,7 @@
             onFrame: async () => { await hands.send({image: document.getElementById('v')}); },
             width: 480, height: 360
         });
-        
-        cam.start().then(() => status.innerText = "READY: SHOW HAND TO UNLOCK");
+        cam.start();
     }
 
     window.onload = startAI;
