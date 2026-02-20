@@ -2,53 +2,65 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>C9 UZAIR - 3D MINI CUBE</title>
+    <title>C9 UZAIR - QUANTUM AI</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; }
-        #v { position: fixed; opacity: 0; pointer-events: none; } /* Camera Hidden */
-        #ui { 
-            position: fixed; top: 20px; width: 100%; text-align: center;
-            color: #00ff41; font-family: monospace; font-size: 12px; letter-spacing: 2px;
+        body { margin: 0; background: radial-gradient(circle, #001100, #000); overflow: hidden; }
+        #v { position: fixed; opacity: 0; pointer-events: none; }
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: repeating-linear-gradient(0deg, rgba(0,255,65,0.03) 0px, rgba(0,255,65,0.03) 1px, transparent 1px, transparent 2px);
+            pointer-events: none; z-index: 50;
+        }
+        #ui-text {
+            position: fixed; bottom: 30px; left: 30px; color: #00ff41;
+            font-family: 'Courier New', monospace; font-size: 12px; text-transform: uppercase;
+            letter-spacing: 3px; z-index: 100;
         }
     </style>
 </head>
 <body>
+    <div id="overlay"></div>
+    <div id="ui-text">Quantum Link: Stable<br>Tracking: Active</div>
     <video id="v" autoplay playsinline></video>
-    <div id="ui">[[ SYSTEM ACTIVE: 3D TRACKING ]]</div>
 
 <script>
-    // 1. THREE.JS SCENE SETUP
+    // --- THREE.JS ADVANCED SETUP ---
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // 2. CREATE STYLIZED 3D CUBE (Small & Bordered)
-    const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6); // Size chota kar diya
+    // 1. The Core Cube (Holographic)
+    const geometry = new THREE.BoxGeometry(0.7, 0.7, 0.7);
     const material = new THREE.MeshBasicMaterial({ 
-        color: 0xffffff, 
-        transparent: true, 
-        opacity: 0.8 
+        color: 0xffffff, transparent: true, opacity: 0.2, side: THREE.DoubleSide 
     });
     const cube = new THREE.Mesh(geometry, material);
-    
-    // Borders (Outlines)
+
+    // 2. Neon Wireframe (Borders)
     const edges = new THREE.EdgesGeometry(geometry);
-    const borderLines = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ 
-        color: 0x00ff41, // Neon Green Borders
-        linewidth: 2 
-    }));
-    cube.add(borderLines); // Border ko cube ka hissa bana diya
-    
+    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x00ff41, linewidth: 2 }));
+    cube.add(line);
+
+    // 3. Inner Point Cloud (Data Particles)
+    const pGeometry = new THREE.BufferGeometry();
+    const pCount = 200;
+    const coords = new Float32Array(pCount * 3);
+    for(let i=0; i<pCount*3; i++) coords[i] = (Math.random() - 0.5) * 0.6;
+    pGeometry.setAttribute('position', new THREE.BufferAttribute(coords, 3));
+    const pMaterial = new THREE.PointsMaterial({ color: 0x00ff41, size: 0.02 });
+    const particles = new THREE.Points(pGeometry, pMaterial);
+    cube.add(particles);
+
     scene.add(cube);
     camera.position.z = 5;
 
-    // 3. AI HAND TRACKING
-    async function startAI() {
+    // --- AI HAND ENGINE ---
+    async function initAI() {
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
         hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.8 });
         
@@ -59,29 +71,27 @@
             }
 
             const lm = results.multiHandLandmarks[0];
-
-            // GESTURE: Fist to Hide (Muthi band logic)
-            const isFist = lm[8].y > lm[6].y && lm[12].y > lm[10].y && lm[16].y > lm[14].y;
+            const isFist = lm[8].y > lm[6].y && lm[12].y > lm[10].y;
             
             if (isFist) {
                 cube.visible = false;
             } else {
                 cube.visible = true;
 
-                // Position Tracking (Palm center)
-                const x = (0.5 - lm[9].x) * 8; 
-                const y = (0.5 - lm[9].y) * 5;
-                cube.position.x = x;
-                cube.position.y = y;
+                // Smooth Tracking
+                const targetX = (0.5 - lm[9].x) * 10;
+                const targetY = (0.5 - lm[9].y) * 6;
+                cube.position.x += (targetX - cube.position.x) * 0.2;
+                cube.position.y += (targetY - cube.position.y) * 0.2;
 
-                // Zoom Logic (Distance between thumb and pinky)
-                const dist = Math.sqrt(Math.pow(lm[4].x - lm[20].x, 2) + Math.pow(lm[4].y - lm[20].y, 2));
-                const scaleFactor = dist * 8; 
-                cube.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                // Scaling (Zoom)
+                const d = Math.sqrt(Math.pow(lm[4].x - lm[20].x, 2) + Math.pow(lm[4].y - lm[20].y, 2));
+                const s = d * 12;
+                cube.scale.set(s, s, s);
 
-                // Constant Rotation for 3D Feel
-                cube.rotation.x += 0.02;
-                cube.rotation.y += 0.02;
+                // Rotation based on hand tilt
+                cube.rotation.y += 0.03;
+                cube.rotation.x = (lm[9].y - 0.5) * 2;
             }
         });
 
@@ -92,19 +102,29 @@
         cam.start();
     }
 
+    // --- ANIMATION LOOP ---
     function animate() {
         requestAnimationFrame(animate);
+        
+        // Pulse Effect
+        const time = Date.now() * 0.002;
+        const pulse = 1 + Math.sin(time) * 0.05;
+        cube.scale.multiplyScalar(pulse);
+        
+        // Rotate particles inside
+        particles.rotation.y += 0.01;
+        
         renderer.render(scene, camera);
     }
 
-    startAI();
+    initAI();
     animate();
 
-    window.addEventListener('resize', () => {
+    window.onresize = () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+    };
 </script>
 </body>
 </html>
